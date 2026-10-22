@@ -1,0 +1,54 @@
+{
+  "name": "writing-studio",
+  "productName": "Writing Studio",
+  "version": "0.1.0",
+  "description": "Win11 本地写作软件：文章、独立文档、时间轴、人物关系",
+  "author": "MonkeyCode",
+  "license": "MIT",
+  "main": "src/main/main.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "electron:dev": "concurrently -k \"vite\" \"cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .\"",
+    "electron:start": "npm run build && electron .",
+    "electron:build": "npm run build && electron-builder --win"
+  },
+  "dependencies": {
+    "vue": "^3.4.27"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.0.4",
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3",
+    "electron": "^30.0.2",
+    "electron-builder": "^24.13.3",
+    "vite": "^5.2.11"
+  },
+  "build": {
+    "appId": "com.monkeycode.writingstudio",
+    "productName": "Writing Studio",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "src/main/**/*",
+      "src/preload/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}
