@@ -120,7 +120,14 @@ function cancelCreate() {
 }
 
 function countOf(type) {
-  return article.value.children.filter((c) => c.type === type).length
+  if (type === 'doc') return article.value.children.filter((c) => c.type === 'doc').length
+  if (type === 'relations') {
+    return article.value.children.find((c) => c.type === 'relations')?.persons.length || 0
+  }
+  if (type === 'timeline') {
+    return article.value.children.find((c) => c.type === 'timeline')?.segments.length || 0
+  }
+  return 0
 }
 
 function scrollChild(childId) {
@@ -150,12 +157,12 @@ watch(
         @input="article.updatedAt = Date.now()"
       />
       <span class="word-total" title="全部章节字数合计">章节总字数：{{ totalWords }}</span>
-      <button class="btn small" @click="showContent = !showContent">{{ showContent ? '收起正文' : '文章正文' }}</button>
+      <button class="btn small" @click="showContent = !showContent">{{ showContent ? '收起大纲' : '大纲' }}</button>
       <button class="btn small" @click="showExport = !showExport">导出</button>
     </div>
 
     <div v-if="showContent" class="ws-content">
-      <textarea v-model="article.content" placeholder="文章正文（母任务内容）..." @input="article.updatedAt = Date.now()"></textarea>
+      <textarea v-model="article.content" placeholder="文章大纲（母任务内容）..." @input="article.updatedAt = Date.now()"></textarea>
     </div>
 
     <div v-if="showExport" class="ws-export">
@@ -197,15 +204,15 @@ watch(
                 </template>
               </span>
               <button
-                v-if="maximizedKey !== col.key"
+                v-if="col.type === 'doc' && maximizedKey !== col.key"
                 class="btn small"
                 @click="creating === col.type ? cancelCreate() : startCreate(col.type)"
               >
-                {{ creating === col.type ? '取消' : '+ 新建' }}
+                {{ creating === col.type ? '取消' : '+ 新建章节' }}
               </button>
             </div>
 
-            <div v-if="creating === col.type" class="create-form">
+            <div v-if="col.type === 'doc' && creating === col.type" class="create-form">
               <input
                 v-model="newTitle"
                 :placeholder="`输入${col.title}标题（留空则用默认名）`"
@@ -216,7 +223,7 @@ watch(
 
             <div class="col-body">
               <component :is="col.comp" :article="article" :expanded="expanded" />
-              <div v-if="countOf(col.type) === 0" class="col-empty">
+              <div v-if="col.type === 'doc' && countOf(col.type) === 0" class="col-empty">
                 暂无{{ col.title }}
                 <div class="rel-hint">{{ col.hint }}</div>
               </div>

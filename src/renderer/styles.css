@@ -332,6 +332,20 @@ textarea { resize: vertical; }
 
 .sub-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 
+.tool-gap { flex: 1; }
+.tl-toolbar { margin-bottom: 2px; }
+
+textarea:fullscreen {
+  background: #ffffff;
+  border: none;
+  border-radius: 0;
+  width: 100vw;
+  height: 100vh;
+  padding: 10vh 14vw;
+  font-size: 18px;
+  resize: none;
+}
+
 .seg-list { display: flex; flex-direction: column; gap: 8px; }
 
 .seg {

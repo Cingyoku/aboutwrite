@@ -1,6 +1,7 @@
 <script setup>
 import { ref, reactive, computed } from 'vue'
 import { store, FACTION_COLORS } from '../store'
+import { saveFile, buildRelationsSvg } from '../export'
 
 const props = defineProps({
   article: { type: Object, required: true },
@@ -9,6 +10,7 @@ const props = defineProps({
 
 const selectedPerson = ref(null)
 const selectedEdge = ref(null)
+const hoverEdge = ref(null)
 const relFrom = ref(null)
 const relTo = ref(null)
 const edgeLabel = ref('')
@@ -17,11 +19,15 @@ const pDraft = reactive({ name: '', note: '', bio: '', factionId: null })
 const newName = ref('')
 const editLabel = ref('')
 const draggingId = ref(null)
+const bendingId = ref(null)
 
 const factionView = ref(null)
 const factionEditing = ref(false)
 const fDraft = reactive({ name: '', desc: '', color: FACTION_COLORS[0] })
 const newFactionName = ref('')
+
+const draggingPerson = ref(null)
+const dropFactionId = ref(null)
 
 const R = 22
 
@@ -50,6 +56,13 @@ function posOf(id) {
   return p ? { x: p.x, y: p.y } : { x: 0, y: 0 }
 }
 
+function shorten(a, b, dist) {
+  const dx = b.x - a.x
+  const dy = b.y - a.y
+  const len = Math.hypot(dx, dy) || 1
+  return { x: a.x + (dx / len) * dist, y: a.y + (dy / len) * dist }
+}
+
 const edgeLayout = computed(() => {
   const groups = new Map()
   for (const e of props.rel.edges) {
@@ -64,34 +77,26 @@ const edgeLayout = computed(() => {
   return m
 })
 
-function shorten(a, b, dist) {
-  const dx = b.x - a.x
-  const dy = b.y - a.y
-  const len = Math.hypot(dx, dy) || 1
-  return { x: a.x + (dx / len) * dist, y: a.y + (dy / len) * dist }
-}
-
 const edgePaths = computed(() =>
   props.rel.edges.map((e) => {
-    const a = shorten(posOf(e.from), posOf(e.to), R + 3)
-    const b = shorten(posOf(e.to), posOf(e.from), R + 7)
+    const a0 = posOf(e.from)
+    const b0 = posOf(e.to)
+    const a = shorten(a0, b0, R + 3)
+    const b = shorten(b0, a0, R + 7)
     const lay = edgeLayout.value.get(e.id) || { index: 0, count: 1 }
-    let d
-    let mid
-    if (lay.count === 1) {
-      d = `M ${a.x} ${a.y} L ${b.x} ${b.y}`
-      mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
-    } else {
-      const off = (lay.index - (lay.count - 1) / 2) * 28
-      const dx = b.x - a.x
-      const dy = b.y - a.y
-      const len = Math.hypot(dx, dy) || 1
-      const cx = (a.x + b.x) / 2 + (-dy / len) * off
-      const cy = (a.y + b.y) / 2 + (dx / len) * off
-      d = `M ${a.x} ${a.y} Q ${cx} ${cy} ${b.x} ${b.y}`
-      mid = { x: 0.25 * a.x + 0.5 * cx + 0.25 * b.x, y: 0.25 * a.y + 0.5 * cy + 0.25 * b.y }
-    }
-    return { e, d, mid }
+    const auto = lay.count > 1 ? (lay.index - (lay.count - 1) / 2) * 28 : 0
+    const m0 = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
+    const dx = b.x - a.x
+    const dy = b.y - a.y
+    const len = Math.hypot(dx, dy) || 1
+    const px = -dy / len
+    const py = dx / len
+    const off = auto + (e.bend || 0)
+    const cx = m0.x + px * off
+    const cy = m0.y + py * off
+    const d = `M ${a.x} ${a.y} Q ${cx} ${cy} ${b.x} ${b.y}`
+    const mid = { x: 0.25 * a.x + 0.5 * cx + 0.25 * b.x, y: 0.25 * a.y + 0.5 * cy + 0.25 * b.y }
+    return { e, d, mid, m0, px, py, auto }
   })
 )
 
@@ -116,12 +121,23 @@ function addFaction() {
   }
 }
 
+async function exportSvg() {
+  try {
+    const svg = buildRelationsSvg(props.rel)
+    const name = (props.rel.title || '人物关系').replace(/[\\/:*?"<>|]/g, '_')
+    await saveFile(`${name}.svg`, svg, 'image/svg+xml')
+  } catch (err) {
+    window.alert('导出失败：' + (err.message || err))
+  }
+}
+
 function isHighlighted(p) {
   const f = store.focus
   return !!f && f.childId === props.rel.id && f.personId === p.id
 }
 
 function nodeDown(e, p) {
+  if (bendingId.value) return
   selectedEdge.value = null
   factionView.value = null
   factionEditing.value = false
@@ -163,6 +179,36 @@ function nodeMove(e, p) {
 
 function nodeUp() {
   draggingId.value = null
+}
+
+function bendDown(e, item) {
+  e.stopPropagation()
+  bendingId.value = item.e.id
+  try {
+    e.currentTarget.setPointerCapture(e.pointerId)
+  } catch (err) {
+    /* ignore */
+  }
+}
+
+function bendMove(e, item) {
+  if (bendingId.value !== item.e.id) return
+  const svg = e.currentTarget.closest('svg')
+  if (!svg) return
+  const pt = svg.createSVGPoint()
+  pt.x = e.clientX
+  pt.y = e.clientY
+  const m = svg.getScreenCTM()
+  if (!m) return
+  const P = pt.matrixTransform(m.inverse())
+  const cx = 2 * P.x - item.m0.x
+  const cy = 2 * P.y - item.m0.y
+  const off = (cx - item.m0.x) * item.px + (cy - item.m0.y) * item.py
+  item.e.bend = Math.max(-120, Math.min(120, Math.round(off - item.auto)))
+}
+
+function bendUp() {
+  bendingId.value = null
 }
 
 function startEditPerson(p) {
@@ -236,6 +282,7 @@ function confirmEdge() {
 }
 
 function selectEdge(item) {
+  if (bendingId.value) return
   selectedPerson.value = null
   relFrom.value = null
   relTo.value = null
@@ -259,6 +306,36 @@ function removeEdgeSel() {
   clearSel()
 }
 
+function onPersonDragStart(e, p) {
+  if (!p) return
+  draggingPerson.value = p.id
+  e.dataTransfer.effectAllowed = 'move'
+  e.dataTransfer.setData('text/plain', p.id)
+}
+
+function onPersonDragEnd() {
+  draggingPerson.value = null
+  dropFactionId.value = null
+}
+
+function factionDragOver(e, key) {
+  if (!draggingPerson.value) return
+  e.preventDefault()
+  e.dataTransfer.dropEffect = 'move'
+  dropFactionId.value = key
+}
+
+function factionDragLeave(key) {
+  if (dropFactionId.value === key) dropFactionId.value = null
+}
+
+function factionDrop(e, f) {
+  if (!draggingPerson.value) return
+  store.updatePerson(props.article.id, props.rel.id, draggingPerson.value, { factionId: f ? f.id : null })
+  draggingPerson.value = null
+  dropFactionId.value = null
+}
+
 function clearSel() {
   selectedPerson.value = null
   selectedEdge.value = null
@@ -276,25 +353,40 @@ function clearSel() {
     <button class="btn small primary" @click="addPerson">+ 添加人物</button>
     <input v-model="newFactionName" placeholder="阵营名称" @keyup.enter="addFaction" />
     <button class="btn small" @click="addFaction">+ 添加阵营</button>
+    <span class="tool-gap"></span>
+    <button class="btn small" title="导出为 .svg 矢量图" @click="exportSvg">导出 .svg</button>
   </div>
 
-  <div v-if="rel.factions.length" class="faction-row">
+  <div v-if="rel.factions.length || draggingPerson" class="faction-row">
     <span class="faction-label">阵营：</span>
     <span
       v-for="f in rel.factions"
       :key="f.id"
       class="faction-chip"
-      :class="{ sel: factionView === f.id }"
+      :class="{ sel: factionView === f.id, drop: dropFactionId === f.id }"
       :style="{ borderColor: f.color }"
-      :title="f.desc || '点击查看阵营描述'"
+      :title="f.desc || '点击查看阵营描述，拖动人物到此处加入阵营'"
       @click="selectFaction(f)"
+      @dragover="factionDragOver($event, f.id)"
+      @dragleave="factionDragLeave(f.id)"
+      @drop="factionDrop($event, f)"
     >
       <i class="dot" :style="{ background: f.color }"></i>{{ f.name || '未命名阵营' }}
+    </span>
+    <span
+      v-if="draggingPerson"
+      class="faction-chip drop-none"
+      :class="{ drop: dropFactionId === 'none' }"
+      @dragover="factionDragOver($event, 'none')"
+      @dragleave="factionDragLeave('none')"
+      @drop="factionDrop($event, null)"
+    >
+      移出阵营
     </span>
   </div>
 
   <div class="rel-hint">
-    点击人物选中并查看小传，再点击另一人物建立关系（同一对人物可建立多条关系，将平行错开呈现）；按住人物拖动调整位置；双击人物编辑资料；点击连线选中关系。
+    点击人物选中并查看小传，再点击另一人物建立关系；拖动连线中点的圆点可弯曲线条；同一对人物可建立多条关系；双击人物编辑资料；按住人物小传区的拖动徽标拖到阵营标签上即可加入阵营。
   </div>
 
   <div v-if="relFrom && relTo" class="rel-form">
@@ -325,7 +417,13 @@ function clearSel() {
 
   <div v-else-if="selectedPerson" class="rel-form person-form">
     <div class="pv-head">
-      <b>{{ personById(selectedPerson)?.name || '（未命名）' }}</b>
+      <span
+        class="drag-badge"
+        draggable="true"
+        title="按住拖动到上方阵营标签，加入该阵营"
+        @dragstart="onPersonDragStart($event, personById(selectedPerson))"
+        @dragend="onPersonDragEnd"
+      >⠿ {{ personById(selectedPerson)?.name || '（未命名）' }}</span>
       <span
         v-if="factionOf(personById(selectedPerson))"
         class="faction-chip mini"
@@ -418,6 +516,8 @@ function clearSel() {
       class="edge"
       :class="{ sel: selectedEdge === item.e.id }"
       @click.stop="selectEdge(item)"
+      @mouseenter="hoverEdge = item.e.id"
+      @mouseleave="hoverEdge = null"
     >
       <path class="hit" :d="item.d"></path>
       <path
@@ -426,6 +526,17 @@ function clearSel() {
         :marker-end="selectedEdge === item.e.id ? 'url(#arrow-sel)' : 'url(#arrow-normal)'"
       ></path>
       <text :x="item.mid.x" :y="item.mid.y - 8">{{ item.e.label }}</text>
+      <circle
+        v-if="selectedEdge === item.e.id || hoverEdge === item.e.id || bendingId === item.e.id"
+        class="bend-handle"
+        :cx="item.mid.x"
+        :cy="item.mid.y"
+        r="6"
+        @pointerdown.stop.prevent="bendDown($event, item)"
+        @pointermove="bendMove($event, item)"
+        @pointerup.stop="bendUp"
+        @pointercancel="bendUp"
+      ></circle>
     </g>
 
     <g
@@ -462,5 +573,40 @@ function clearSel() {
 .faction-dot {
   stroke: #ffffff;
   stroke-width: 1;
+}
+.bend-handle {
+  fill: var(--accent);
+  stroke: #ffffff;
+  stroke-width: 2;
+  cursor: grab;
+}
+.bend-handle:active {
+  cursor: grabbing;
+}
+.tool-gap {
+  flex: 1;
+}
+.drag-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 10px;
+  border: 1px dashed var(--accent);
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.06);
+  cursor: grab;
+  font-weight: 700;
+  user-select: none;
+}
+.drag-badge:active {
+  cursor: grabbing;
+}
+.faction-chip.drop {
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.35);
+  background: rgba(37, 99, 235, 0.08);
+}
+.faction-chip.drop-none {
+  border-style: dashed;
+  color: var(--muted);
 }
 </style>

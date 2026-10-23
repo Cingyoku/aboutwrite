@@ -16,6 +16,20 @@ function onInput() {
   emit('update:modelValue', el.value.innerHTML)
 }
 
+function onKeydown(e) {
+  if (e.key !== 'Enter' || e.shiftKey || e.altKey || e.ctrlKey || e.metaKey) return
+  e.preventDefault()
+  try {
+    document.execCommand('insertParagraph', false, null)
+    if (props.indent) {
+      document.execCommand('insertText', false, '\u3000\u3000')
+    }
+  } catch (err) {
+    el.value.innerHTML += '<p></p>'
+  }
+  onInput()
+}
+
 watch(
   () => props.modelValue,
   (nv) => {
@@ -42,6 +56,7 @@ onMounted(() => {
     contenteditable="true"
     :data-placeholder="placeholder"
     @input="onInput"
+    @keydown="onKeydown"
   ></div>
 </template>
 
@@ -61,6 +76,12 @@ onMounted(() => {
 }
 .rich-editor:focus { border-color: var(--accent); }
 .rich-editor p { margin: 0; }
-.rich-editor.indent-on p { text-indent: 2em; }
 .rich-editor:empty::before { content: attr(data-placeholder); color: var(--muted); }
+.rich-editor:fullscreen {
+  max-height: none;
+  border: none;
+  border-radius: 0;
+  padding: 10vh 14vw;
+  font-size: 18px;
+}
 </style>
