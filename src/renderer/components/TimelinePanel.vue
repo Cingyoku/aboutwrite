@@ -254,7 +254,7 @@ function personName(relationsId, personId) {
           </div>
           <div v-else class="seg-actions">
             <button class="btn small" @click="startEdit(tl, seg)">编辑</button>
-            <button class="btn small" @click="openPicker(tl, seg, 'doc')">关联文档</button>
+            <button class="btn small" @click="openPicker(tl, seg, 'doc')">关联章节</button>
             <button class="btn small" @click="openPicker(tl, seg, 'person')">关联人物</button>
             <button class="btn small danger" @click="removeSeg(tl, seg)">删除</button>
           </div>
@@ -264,10 +264,10 @@ function personName(relationsId, personId) {
               v-for="(docId, di) in seg.docLinks"
               :key="'d' + docId"
               class="chip chip-doc"
-              title="点击打开该独立文档"
+              title="点击打开该章节"
               @click="store.focusChild(docId)"
             >
-              <span class="chip-label">文档 · {{ childTitle(docId) }}</span>
+              <span class="chip-label">章节 · {{ childTitle(docId) }}</span>
               <button class="chip-x" title="移除关联" @click.stop="store.removeDocLink(props.article.id, tl.id, seg.id, di)">×</button>
             </span>
             <span

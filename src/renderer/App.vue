@@ -9,7 +9,7 @@ import WorkSpace from './components/WorkSpace.vue'
     <header class="app-header">
       <div class="brand">
         Writing Studio
-        <span class="sub">本地写作 · 文章 / 独立文档 / 时间轴 / 人物关系</span>
+        <span class="sub">本地写作 · 文章 / 章节 / 时间轴 / 人物关系</span>
       </div>
       <button v-if="store.view === 'workspace'" class="btn small" @click="store.back()">返回文章列表</button>
     </header>

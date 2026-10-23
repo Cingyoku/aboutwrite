@@ -6,6 +6,52 @@ export const uid = () =>
     ? crypto.randomUUID()
     : 'id-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10)
 
+export const FONT_SIZES = [12, 14, 16, 18, 20, 22, 24]
+
+export const FACTION_COLORS = [
+  '#e05d5d',
+  '#e08a3c',
+  '#3ca46a',
+  '#3c7de0',
+  '#8a5de0',
+  '#d45db3',
+  '#5db8d4',
+  '#8a9440'
+]
+
+let decodeEl = null
+function decodeEntities(s) {
+  if (typeof document === 'undefined') return s
+  if (!decodeEl) decodeEl = document.createElement('textarea')
+  decodeEl.innerHTML = s
+  return decodeEl.value
+}
+
+export function countWords(html) {
+  const stripped = String(html || '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|h[1-6]|li|blockquote)>/gi, '\n')
+    .replace(/<[^>]*>/g, '')
+  const text = decodeEntities(stripped)
+  const words = (text.match(/[A-Za-z0-9][A-Za-z0-9'’-]*/g) || []).length
+  const cjk = (text.match(/[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/g) || []).length
+  return words + cjk
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+function migrateDocContent(c) {
+  if (c.rich) return
+  const raw = typeof c.content === 'string' ? c.content : ''
+  c.content = raw
+    .split(/\r\n|\r|\n/)
+    .map((line) => `<p>${escapeHtml(line) || '<br>'}</p>`)
+    .join('')
+  c.rich = true
+}
+
 function normalize(raw) {
   const d = raw && typeof raw === 'object' ? raw : {}
   const articles = Array.isArray(d.articles) ? d.articles : []
@@ -16,6 +62,9 @@ function normalize(raw) {
     a.createdAt ||= Date.now()
     a.updatedAt ||= Date.now()
     a.children ||= []
+    if (!a.docFormat || typeof a.docFormat !== 'object') a.docFormat = {}
+    if (typeof a.docFormat.indent !== 'boolean') a.docFormat.indent = true
+    if (!FONT_SIZES.includes(a.docFormat.fontSize)) a.docFormat.fontSize = 16
     for (const c of a.children) {
       c.id ||= uid()
       if (c.type === 'timeline') {
@@ -32,12 +81,21 @@ function normalize(raw) {
         c.title ||= '人物关系'
         c.persons ||= []
         c.edges ||= []
+        c.factions ||= []
         for (const p of c.persons) {
           p.id ||= uid()
           p.name ||= ''
           p.note ||= ''
+          p.bio ||= ''
+          if (p.factionId === undefined) p.factionId = null
           if (typeof p.x !== 'number') p.x = 100
           if (typeof p.y !== 'number') p.y = 100
+        }
+        for (const f of c.factions) {
+          f.id ||= uid()
+          f.name ||= ''
+          f.desc ||= ''
+          if (!FACTION_COLORS.includes(f.color)) f.color = FACTION_COLORS[0]
         }
         for (const e of c.edges) {
           e.id ||= uid()
@@ -45,8 +103,9 @@ function normalize(raw) {
         }
       } else {
         c.type = 'doc'
-        c.title ||= '独立文档'
+        c.title ||= '章节'
         c.content ||= ''
+        migrateDocContent(c)
       }
     }
   }
@@ -108,7 +167,15 @@ export const store = reactive({
 
   createArticle(title) {
     const now = Date.now()
-    const article = { id: uid(), title, content: '', createdAt: now, updatedAt: now, children: [] }
+    const article = {
+      id: uid(),
+      title,
+      content: '',
+      createdAt: now,
+      updatedAt: now,
+      children: [],
+      docFormat: { indent: true, fontSize: 16 }
+    }
     this.data.articles.unshift(article)
     this.openArticle(article.id)
     return article
@@ -134,13 +201,17 @@ export const store = reactive({
   addChild(articleId, type, title) {
     const a = this.data.articles.find((x) => x.id === articleId)
     if (!a) return null
-    const base = { doc: '独立文档', timeline: '时间轴', relations: '人物关系' }[type] || '子项目'
+    const base = { doc: '章节', timeline: '时间轴', relations: '人物关系' }[type] || '子项目'
     const child = { id: uid(), type, title: title || base }
-    if (type === 'doc') child.content = ''
+    if (type === 'doc') {
+      child.content = ''
+      child.rich = true
+    }
     if (type === 'timeline') child.segments = []
     if (type === 'relations') {
       child.persons = []
       child.edges = []
+      child.factions = []
     }
     a.children.push(child)
     a.updatedAt = Date.now()
@@ -160,6 +231,13 @@ export const store = reactive({
 
   childById(article, childId) {
     return article?.children.find((c) => c.id === childId) || null
+  },
+
+  updateDocFormat(articleId, patch) {
+    const a = this.data.articles.find((x) => x.id === articleId)
+    if (!a) return
+    if (typeof patch.indent === 'boolean') a.docFormat.indent = patch.indent
+    if (FONT_SIZES.includes(patch.fontSize)) a.docFormat.fontSize = patch.fontSize
   },
 
   addSegment(articleId, timelineId) {
@@ -236,7 +314,7 @@ export const store = reactive({
     const rel = a?.children.find((c) => c.id === relationsId)
     if (!rel) return null
     const i = rel.persons.length
-    const p = { id: uid(), name, note: '', x: 70 + (i % 7) * 78, y: 55 + Math.floor(i / 7) * 100 }
+    const p = { id: uid(), name, note: '', bio: '', factionId: null, x: 70 + (i % 7) * 78, y: 55 + Math.floor(i / 7) * 100 }
     rel.persons.push(p)
     return p
   },
@@ -248,6 +326,8 @@ export const store = reactive({
     if (!p) return
     if (typeof patch.name === 'string') p.name = patch.name
     if (typeof patch.note === 'string') p.note = patch.note
+    if (typeof patch.bio === 'string') p.bio = patch.bio
+    if (patch.factionId === null || typeof patch.factionId === 'string') p.factionId = patch.factionId
   },
 
   removePerson(articleId, relationsId, personId) {
@@ -259,6 +339,42 @@ export const store = reactive({
     rel.persons.splice(idx, 1)
     rel.edges = rel.edges.filter((e) => e.from !== personId && e.to !== personId)
     cleanPersonReferences(a, personId)
+  },
+
+  addFaction(articleId, relationsId, name) {
+    const a = this.data.articles.find((x) => x.id === articleId)
+    const rel = a?.children.find((c) => c.id === relationsId)
+    if (!rel) return null
+    const f = {
+      id: uid(),
+      name: name || '未命名阵营',
+      desc: '',
+      color: FACTION_COLORS[rel.factions.length % FACTION_COLORS.length]
+    }
+    rel.factions.push(f)
+    return f
+  },
+
+  updateFaction(articleId, relationsId, factionId, patch) {
+    const a = this.data.articles.find((x) => x.id === articleId)
+    const rel = a?.children.find((c) => c.id === relationsId)
+    const f = rel?.factions.find((x) => x.id === factionId)
+    if (!f) return
+    if (typeof patch.name === 'string') f.name = patch.name
+    if (typeof patch.desc === 'string') f.desc = patch.desc
+    if (FACTION_COLORS.includes(patch.color)) f.color = patch.color
+  },
+
+  removeFaction(articleId, relationsId, factionId) {
+    const a = this.data.articles.find((x) => x.id === articleId)
+    const rel = a?.children.find((c) => c.id === relationsId)
+    if (!rel) return
+    const idx = rel.factions.findIndex((f) => f.id === factionId)
+    if (idx < 0) return
+    rel.factions.splice(idx, 1)
+    for (const p of rel.persons) {
+      if (p.factionId === factionId) p.factionId = null
+    }
   },
 
   addEdge(articleId, relationsId, fromId, toId, label) {

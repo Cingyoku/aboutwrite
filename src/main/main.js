@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain } = require('electron')
+const { app, BrowserWindow, ipcMain, dialog } = require('electron')
 const path = require('path')
 const fs = require('fs')
 
@@ -25,6 +25,22 @@ ipcMain.handle('data:save', (_event, data) => {
   }
 })
 
+ipcMain.handle('export:save', async (event, { name, data }) => {
+  try {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    const res = await dialog.showSaveDialog(win, {
+      title: '导出文件',
+      defaultPath: name
+    })
+    if (res.canceled || !res.filePath) return { saved: false, canceled: true }
+    fs.writeFileSync(res.filePath, Buffer.from(data))
+    return { saved: true, path: res.filePath }
+  } catch (err) {
+    console.error('[main] export failed:', err.message)
+    return { saved: false, error: err.message }
+  }
+})
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 1440,
@@ -32,7 +48,7 @@ function createWindow() {
     minWidth: 1100,
     minHeight: 700,
     title: 'Writing Studio',
-    backgroundColor: '#1e1f24',
+    backgroundColor: '#FFFFFF',
     webPreferences: {
       preload: path.join(__dirname, '../preload/preload.js'),
       contextIsolation: true,

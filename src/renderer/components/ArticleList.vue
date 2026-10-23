@@ -35,7 +35,7 @@ function fmtDate(ts) {
       </div>
     </div>
 
-    <div v-if="store.data.articles.length === 0" class="empty">还没有文章。输入标题创建第一篇，文章下可以挂载独立文档、时间轴与人物关系。</div>
+    <div v-if="store.data.articles.length === 0" class="empty">还没有文章。输入标题创建第一篇，文章下可以挂载章节、时间轴与人物关系。</div>
 
     <div class="article-grid">
       <div v-for="a in store.data.articles" :key="a.id" class="article-card" @click="store.openArticle(a.id)">

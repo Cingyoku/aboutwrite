@@ -11,6 +11,14 @@ const emit = defineEmits(['close', 'pick-doc', 'pick-person'])
 const docs = computed(() => props.article.children.filter((c) => c.type === 'doc'))
 const relations = computed(() => props.article.children.filter((c) => c.type === 'relations'))
 
+function preview(html) {
+  return String(html || '')
+    .replace(/<br\s*\/?>/gi, ' ')
+    .replace(/<[^>]*>/g, '')
+    .trim()
+    .slice(0, 40)
+}
+
 function pickDoc(doc) {
   emit('pick-doc', doc.id)
 }
@@ -23,11 +31,11 @@ function pickPerson(rel, personId) {
 <template>
   <div class="modal-mask" @click.self="emit('close')">
     <div class="modal">
-      <h3 v-if="mode === 'doc'">关联独立文档</h3>
+      <h3 v-if="mode === 'doc'">关联章节</h3>
       <h3 v-else>关联人物关系</h3>
 
       <template v-if="mode === 'doc'">
-        <div v-if="docs.length === 0" class="col-empty">当前文章下还没有独立文档，请先在左侧列新建。</div>
+        <div v-if="docs.length === 0" class="col-empty">当前文章下还没有章节，请先在章节列新建。</div>
         <div
           v-for="d in docs"
           :key="d.id"
@@ -35,12 +43,12 @@ function pickPerson(rel, personId) {
           @click="pickDoc(d)"
         >
           {{ d.title }}
-          <div class="pick-sub" v-if="d.content">{{ d.content.slice(0, 40) }}</div>
+          <div class="pick-sub" v-if="d.content">{{ preview(d.content) }}</div>
         </div>
       </template>
 
       <template v-else>
-        <div v-if="relations.length === 0" class="col-empty">当前文章下还没有人物关系，请先在中间列新建。</div>
+        <div v-if="relations.length === 0" class="col-empty">当前文章下还没有人物关系，请先在人物关系列新建。</div>
         <div v-for="r in relations" :key="r.id">
           <div class="pick-group">{{ r.title }}（{{ r.persons.length }} 个人物）</div>
           <div class="pick-item" style="margin-bottom: 6px" @click="pickPerson(r, null)">

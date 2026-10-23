@@ -2,7 +2,7 @@
   "name": "writing-studio",
   "productName": "Writing Studio",
   "version": "0.1.0",
-  "description": "Win11 本地写作软件：文章、独立文档、时间轴、人物关系",
+  "description": "Win11 本地写作软件：文章、章节、时间轴、人物关系",
   "author": "MonkeyCode",
   "license": "MIT",
   "main": "src/main/main.js",
@@ -15,6 +15,7 @@
     "electron:build": "npm run build && electron-builder --win"
   },
   "dependencies": {
+    "docx": "^9.13.0",
     "vue": "^3.4.27"
   },
   "devDependencies": {
