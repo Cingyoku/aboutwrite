@@ -311,7 +311,8 @@ export function buildRelationsSvg(rel) {
   const edgeSvg = []
   for (const ids of groups.values()) {
     ids.forEach((e, i) => {
-      const auto = ids.length > 1 ? (i - (ids.length - 1) / 2) * 28 : 0
+      const step = 3 + 1.6
+      const auto = ids.length > 1 ? (i - (ids.length - 1) / 2) * step : 0
       const off = auto + (e.bend || 0)
       const a = svgShorten(posOf(e.from), posOf(e.to), SVG_R + 3)
       const b = svgShorten(posOf(e.to), posOf(e.from), SVG_R + 7)
@@ -320,16 +321,24 @@ export function buildRelationsSvg(rel) {
       const dx = b.x - a.x
       const dy = b.y - a.y
       const len = Math.hypot(dx, dy) || 1
-      const cx = mx + (-dy / len) * off
-      const cy = my + (dx / len) * off
-      const lx = 0.25 * a.x + 0.5 * cx + 0.25 * b.x
-      const ly = 0.25 * a.y + 0.5 * cy + 0.25 * b.y
+      const nx = -dy / len
+      const ny = dx / len
+      const cx = mx + nx * off
+      const cy = my + ny * off
+      const lx0 = 0.25 * a.x + 0.5 * cx + 0.25 * b.x
+      const ly0 = 0.25 * a.y + 0.5 * cy + 0.25 * b.y
       edgeSvg.push(
         `<path d="M ${a.x} ${a.y} Q ${cx} ${cy} ${b.x} ${b.y}" fill="none" stroke="#94a3b8" stroke-width="1.6" marker-end="url(#arrow)"></path>`
       )
       if (e.label) {
+        const labelOff = (ids.length > 1 ? ((ids.length - 1) / 2) * step : 0) + 12 + (ids.length - 1 - i) * 14
+        const lx = lx0 + nx * labelOff
+        const ly = ly0 + ny * labelOff
+        let ang = (Math.atan2(dy, dx) * 180) / Math.PI
+        if (ang > 90) ang -= 180
+        if (ang < -90) ang += 180
         edgeSvg.push(
-          `<text x="${lx}" y="${ly - 8}" text-anchor="middle" dominant-baseline="middle" font-size="12" fill="#1f2937" stroke="#ffffff" stroke-width="4" paint-order="stroke">${escXml(e.label)}</text>`
+          `<text transform="translate(${lx} ${ly}) rotate(${ang})" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#1f2937" stroke="#ffffff" stroke-width="4" paint-order="stroke">${escXml(e.label)}</text>`
         )
       }
     })

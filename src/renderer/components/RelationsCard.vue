@@ -84,7 +84,8 @@ const edgePaths = computed(() =>
     const a = shorten(a0, b0, R + 3)
     const b = shorten(b0, a0, R + 7)
     const lay = edgeLayout.value.get(e.id) || { index: 0, count: 1 }
-    const auto = lay.count > 1 ? (lay.index - (lay.count - 1) / 2) * 28 : 0
+    const step = 3 + 1.6
+    const auto = lay.count > 1 ? (lay.index - (lay.count - 1) / 2) * step : 0
     const m0 = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
     const dx = b.x - a.x
     const dy = b.y - a.y
@@ -96,7 +97,12 @@ const edgePaths = computed(() =>
     const cy = m0.y + py * off
     const d = `M ${a.x} ${a.y} Q ${cx} ${cy} ${b.x} ${b.y}`
     const mid = { x: 0.25 * a.x + 0.5 * cx + 0.25 * b.x, y: 0.25 * a.y + 0.5 * cy + 0.25 * b.y }
-    return { e, d, mid, m0, px, py, auto }
+    const labelOff = (lay.count > 1 ? ((lay.count - 1) / 2) * step : 0) + 12 + (lay.count - 1 - lay.index) * 14
+    const label = { x: mid.x + px * labelOff, y: mid.y + py * labelOff }
+    let ang = (Math.atan2(dy, dx) * 180) / Math.PI
+    if (ang > 90) ang -= 180
+    if (ang < -90) ang += 180
+    return { e, d, mid, m0, px, py, auto, label, ang }
   })
 )
 
@@ -525,7 +531,12 @@ function clearSel() {
         :d="item.d"
         :marker-end="selectedEdge === item.e.id ? 'url(#arrow-sel)' : 'url(#arrow-normal)'"
       ></path>
-      <text :x="item.mid.x" :y="item.mid.y - 8">{{ item.e.label }}</text>
+      <text
+        :transform="`translate(${item.label.x} ${item.label.y}) rotate(${item.ang})`"
+        text-anchor="middle"
+        dominant-baseline="central"
+        >{{ item.e.label }}</text
+      >
       <circle
         v-if="selectedEdge === item.e.id || hoverEdge === item.e.id || bendingId === item.e.id"
         class="bend-handle"
