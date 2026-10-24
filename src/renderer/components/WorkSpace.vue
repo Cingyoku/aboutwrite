@@ -120,14 +120,7 @@ function cancelCreate() {
 }
 
 function countOf(type) {
-  if (type === 'doc') return article.value.children.filter((c) => c.type === 'doc').length
-  if (type === 'relations') {
-    return article.value.children.find((c) => c.type === 'relations')?.persons.length || 0
-  }
-  if (type === 'timeline') {
-    return article.value.children.find((c) => c.type === 'timeline')?.segments.length || 0
-  }
-  return 0
+  return article.value.children.filter((c) => c.type === type).length
 }
 
 function scrollChild(childId) {
@@ -204,15 +197,15 @@ watch(
                 </template>
               </span>
               <button
-                v-if="col.type === 'doc' && maximizedKey !== col.key"
+                v-if="maximizedKey !== col.key"
                 class="btn small"
                 @click="creating === col.type ? cancelCreate() : startCreate(col.type)"
               >
-                {{ creating === col.type ? '取消' : '+ 新建章节' }}
+                {{ creating === col.type ? '取消' : '+ 新建' }}
               </button>
             </div>
 
-            <div v-if="col.type === 'doc' && creating === col.type" class="create-form">
+            <div v-if="creating === col.type" class="create-form">
               <input
                 v-model="newTitle"
                 :placeholder="`输入${col.title}标题（留空则用默认名）`"
@@ -223,7 +216,7 @@ watch(
 
             <div class="col-body">
               <component :is="col.comp" :article="article" :expanded="expanded" />
-              <div v-if="col.type === 'doc' && countOf(col.type) === 0" class="col-empty">
+              <div v-if="countOf(col.type) === 0" class="col-empty">
                 暂无{{ col.title }}
                 <div class="rel-hint">{{ col.hint }}</div>
               </div>

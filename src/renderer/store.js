@@ -108,51 +108,8 @@ function normalize(raw) {
         migrateDocContent(c)
       }
     }
-    ensureSingleWorkspaces(a)
   }
   return { articles }
-}
-
-function ensureSingleWorkspaces(a) {
-  const rels = a.children.filter((c) => c.type === 'relations')
-  let primaryRel = rels[0]
-  if (!primaryRel) {
-    primaryRel = { id: uid(), type: 'relations', title: '人物关系', persons: [], edges: [], factions: [] }
-    a.children.push(primaryRel)
-  }
-  if (rels.length > 1) {
-    const idMap = new Map()
-    for (const dup of rels.slice(1)) {
-      idMap.set(dup.id, primaryRel.id)
-      for (const p of dup.persons) primaryRel.persons.push(p)
-      for (const f of dup.factions) primaryRel.factions.push(f)
-      for (const e of dup.edges) primaryRel.edges.push(e)
-    }
-    a.children = a.children.filter((c) => c.type !== 'relations' || c === primaryRel)
-    if (idMap.size) {
-      for (const c of a.children) {
-        if (c.type !== 'timeline') continue
-        for (const s of c.segments) {
-          for (const l of s.personLinks) {
-            if (idMap.has(l.relationsId)) l.relationsId = idMap.get(l.relationsId)
-          }
-        }
-      }
-    }
-  }
-
-  const tls = a.children.filter((c) => c.type === 'timeline')
-  let primaryTl = tls[0]
-  if (!primaryTl) {
-    primaryTl = { id: uid(), type: 'timeline', title: '时间轴', segments: [] }
-    a.children.push(primaryTl)
-  }
-  if (tls.length > 1) {
-    for (const dup of tls.slice(1)) {
-      for (const s of dup.segments) primaryTl.segments.push(s)
-    }
-    a.children = a.children.filter((c) => c.type !== 'timeline' || c === primaryTl)
-  }
 }
 
 function cleanDocReferences(article, docId) {

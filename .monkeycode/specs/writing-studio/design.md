@@ -30,13 +30,14 @@ graph TD
 
 | 组件 | 职责 |
 | --- | --- |
-| store.js | 数据模型 normalize/迁移（v1 纯文本→富文本；多人物关系/时间轴子项目→单工作区合并并重映射 personLinks）、全部业务 action、字数统计 `countWords` |
+| store.js | 数据模型 normalize/迁移（v1 纯文本→富文本）、全部业务 action、字数统计 `countWords` |
 | export.js | `htmlToPlain`、`buildMarkdown`、`buildRtf`（含 `rtfTable` 内置表格）、`buildDocx`(docx 库)、`buildPng`(canvas)、`buildRelationsSvg`/`buildTimelineSvg`(.svg)、`saveFile`(IPC 或下载) |
 | RichEditor.vue | contenteditable 富文本编辑器；WHEN 回车缩进开启，keydown Enter → `insertParagraph` + `insertText` 两个全角空格 |
 | WorkSpace.vue | 三列布局状态机（normal/max/min + 可拖分隔条）、大纲入口、总字数、文章级导出（勾选范围） |
 | DocPanel.vue | 章节卡片、每窗口字数、格式工具栏（回车缩进/字号/加粗/斜体）、导出面板（范围+格式） |
 | RelationsCard.vue | SVG 关系图：人物节点（阵营色环）、多重关系自动错开 + bend 手柄拖拽弯曲、阵营标签为拖放目标（人物卡片拖入入营/拖出离营）、导出 .svg |
-| TimelinePanel.vue | 单工作区直接新建文段、手柄拖拽排序、关联 chips、导出 .svg（竖向时间轴） |
+| RelationsPanel.vue | 人物关系子项目卡片列表（标题/删除/折叠），内嵌 RelationsCard |
+| TimelinePanel.vue | 时间轴子项目卡片列表：文段新建/编辑（时间可空、事件必填）、手柄拖拽排序、关联 chips、导出 .svg（竖向时间轴） |
 | renderer/main.js | focusin 追踪最近文本窗口；F11 → 对当前 rich-editor/textarea 切换 requestFullscreen |
 
 ## Data Models
@@ -48,8 +49,8 @@ article = {
   children: [child]
 }
 child(type='doc')      = { id, type:'doc', title, content /*HTML*/, rich:true }        // 章节窗口
-child(type='timeline') = { id, type, title, segments:[{ id, time, event, docLinks[], personLinks[] }] }  // 每篇一个，自动合并迁移
-child(type='relations')= {   // 每篇一个，自动合并迁移
+child(type='timeline') = { id, type, title, segments:[{ id, time, event, docLinks[], personLinks[] }] }  // 可多个
+child(type='relations')= {   // 可多个
   id, type, title,
   persons: [{ id, name, note, bio, factionId|null, x, y }],
   factions: [{ id, name, desc, color }],
