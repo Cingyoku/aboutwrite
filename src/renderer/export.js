@@ -311,7 +311,7 @@ export function buildRelationsSvg(rel) {
   const edgeSvg = []
   for (const ids of groups.values()) {
     ids.forEach((e, i) => {
-      const step = 3 + 1.6
+      const step = 15 + 1.6
       const auto = ids.length > 1 ? (i - (ids.length - 1) / 2) * step : 0
       const off = auto + (e.bend || 0)
       const a = svgShorten(posOf(e.from), posOf(e.to), SVG_R + 3)

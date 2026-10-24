@@ -84,7 +84,7 @@ const edgePaths = computed(() =>
     const a = shorten(a0, b0, R + 3)
     const b = shorten(b0, a0, R + 7)
     const lay = edgeLayout.value.get(e.id) || { index: 0, count: 1 }
-    const step = 3 + 1.6
+    const step = 15 + 1.6
     const auto = lay.count > 1 ? (lay.index - (lay.count - 1) / 2) * step : 0
     const m0 = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
     const dx = b.x - a.x
