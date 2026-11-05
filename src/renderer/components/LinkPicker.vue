@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue'
+import { ref, computed } from 'vue'
 
 const props = defineProps({
   article: { type: Object, required: true },
@@ -10,6 +10,22 @@ const emit = defineEmits(['close', 'pick-doc', 'pick-person'])
 
 const docs = computed(() => props.article.children.filter((c) => c.type === 'doc'))
 const relations = computed(() => props.article.children.filter((c) => c.type === 'relations'))
+
+const query = ref('')
+
+const matchedRelations = computed(() => {
+  const q = query.value.trim().toLowerCase()
+  if (!q) return relations.value
+  return relations.value
+    .map((r) => {
+      const hit = (r.title || '').toLowerCase().includes(q)
+      const persons = r.persons.filter(
+        (p) => hit || (p.name || '').toLowerCase().includes(q) || (p.note || '').toLowerCase().includes(q)
+      )
+      return persons.length || hit ? { ...r, persons } : null
+    })
+    .filter(Boolean)
+})
 
 function preview(html) {
   return String(html || '')
@@ -48,8 +64,9 @@ function pickPerson(rel, personId) {
       </template>
 
       <template v-else>
-        <div v-if="relations.length === 0" class="col-empty">当前文章下还没有人物关系，请先在人物关系列新建。</div>
-        <div v-for="r in relations" :key="r.id">
+        <input v-model="query" class="pick-search" placeholder="搜索人物名称 / 备注 / 关系图标题" />
+        <div v-if="matchedRelations.length === 0" class="col-empty">没有匹配的人物或关系图。</div>
+        <div v-for="r in matchedRelations" :key="r.id">
           <div class="pick-group">{{ r.title }}（{{ r.persons.length }} 个人物）</div>
           <div class="pick-item" style="margin-bottom: 6px" @click="pickPerson(r, null)">
             整个关系图「{{ r.title }}」

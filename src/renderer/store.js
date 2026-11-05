@@ -8,6 +8,13 @@ export const uid = () =>
 
 export const FONT_SIZES = [12, 14, 16, 18, 20, 22, 24]
 
+// 日期键：YYYY-MM-DD（本地时区）
+export function dateKey(ts = Date.now()) {
+  const d = new Date(ts)
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+}
+
 export const FACTION_COLORS = [
   '#e05d5d',
   '#e08a3c',
@@ -34,7 +41,8 @@ export function countWords(html) {
     .replace(/<[^>]*>/g, '')
   const text = decodeEntities(stripped)
   const words = (text.match(/[A-Za-z0-9][A-Za-z0-9'’-]*/g) || []).length
-  const cjk = (text.match(/[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/g) || []).length
+  // 汉字与日语假名均按单字计数（假名含平假名、片假名、半角片假名、片假名扩展及「々」）
+  const cjk = (text.match(/[\u3005\u3040-\u30ff\u31f0-\u31ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uff66-\uff9f]/g) || []).length
   return words + cjk
 }
 
@@ -55,6 +63,14 @@ function migrateDocContent(c) {
 function normalize(raw) {
   const d = raw && typeof raw === 'object' ? raw : {}
   const articles = Array.isArray(d.articles) ? d.articles : []
+  const inspirations = Array.isArray(d.inspirations) ? d.inspirations : []
+  for (const i of inspirations) {
+    i.id ||= uid()
+    i.title ||= '未命名灵感'
+    i.content ||= ''
+    i.createdAt ||= Date.now()
+    i.updatedAt ||= Date.now()
+  }
   for (const a of articles) {
     a.id ||= uid()
     a.title ||= '未命名文章'
@@ -74,6 +90,8 @@ function normalize(raw) {
           s.id ||= uid()
           s.time ||= ''
           s.event ||= ''
+          s.desc ||= ''
+          if (typeof s.descHidden !== 'boolean') s.descHidden = false
           s.docLinks ||= []
           s.personLinks ||= []
         }
@@ -87,7 +105,9 @@ function normalize(raw) {
           p.name ||= ''
           p.note ||= ''
           p.bio ||= ''
-          if (p.factionId === undefined) p.factionId = null
+          if (!Array.isArray(p.factionIds)) p.factionIds = p.factionId ? [p.factionId] : []
+          p.factionIds = p.factionIds.filter((fid) => typeof fid === 'string')
+          p.factionId = p.factionIds[0] || null
           if (typeof p.x !== 'number') p.x = 100
           if (typeof p.y !== 'number') p.y = 100
         }
@@ -100,6 +120,7 @@ function normalize(raw) {
         for (const e of c.edges) {
           e.id ||= uid()
           e.label ||= ''
+          delete e.bend
         }
       } else {
         c.type = 'doc'
@@ -109,7 +130,19 @@ function normalize(raw) {
       }
     }
   }
-  return { articles }
+  const stats = d.stats && typeof d.stats === 'object' ? d.stats : {}
+  stats.words = stats.words && typeof stats.words === 'object' ? stats.words : {}
+  stats.duration = stats.duration && typeof stats.duration === 'object' ? stats.duration : {}
+  if (typeof stats.totalWordsSnapshot !== 'number') stats.totalWordsSnapshot = -1
+  if (
+    !stats.dayStart ||
+    typeof stats.dayStart !== 'object' ||
+    typeof stats.dayStart.date !== 'string' ||
+    typeof stats.dayStart.total !== 'number'
+  ) {
+    stats.dayStart = null
+  }
+  return { articles, inspirations, stats }
 }
 
 function cleanDocReferences(article, docId) {
@@ -146,8 +179,19 @@ export const store = reactive({
   loadError: false,
   view: 'list',
   currentArticleId: null,
-  data: { articles: [] },
+  currentInspirationId: null,
+  data: { articles: [], inspirations: [], stats: { words: {}, duration: {}, totalWordsSnapshot: -1 } },
   focus: null,
+  // 列头「居中视图」信号：自增触发所有人物关系画布重新居中
+  relFitTick: 0,
+  // 列头时间轴「新建」信号：指向需要追加文段的时间轴
+  segFocus: null,
+  // 最近一次章节编辑输入时间，用于统计码字时长
+  _lastInput: 0,
+
+  markWritingActivity() {
+    this._lastInput = Date.now()
+  },
 
   async init() {
     try {
@@ -194,8 +238,36 @@ export const store = reactive({
 
   back() {
     this.currentArticleId = null
+    this.currentInspirationId = null
     this.focus = null
     this.view = 'list'
+  },
+
+  get currentInspiration() {
+    return (this.data.inspirations || []).find((i) => i.id === this.currentInspirationId) || null
+  },
+
+  createInspiration(title) {
+    if (!Array.isArray(this.data.inspirations)) this.data.inspirations = []
+    const now = Date.now()
+    const insp = { id: uid(), title: title || '未命名灵感', content: '', createdAt: now, updatedAt: now }
+    this.data.inspirations.unshift(insp)
+    return insp
+  },
+
+  openInspiration(id) {
+    this.currentInspirationId = id
+    this.view = 'inspiration'
+  },
+
+  deleteInspiration(id) {
+    const list = this.data.inspirations || []
+    const idx = list.findIndex((i) => i.id === id)
+    if (idx >= 0) list.splice(idx, 1)
+    if (this.currentInspirationId === id) {
+      this.currentInspirationId = null
+      this.view = 'list'
+    }
   },
 
   addChild(articleId, type, title) {
@@ -244,7 +316,7 @@ export const store = reactive({
     const a = this.data.articles.find((x) => x.id === articleId)
     const tl = a?.children.find((c) => c.id === timelineId)
     if (!tl) return null
-    const seg = { id: uid(), time: '', event: '', docLinks: [], personLinks: [] }
+    const seg = { id: uid(), time: '', event: '', desc: '', descHidden: false, docLinks: [], personLinks: [] }
     tl.segments.push(seg)
     return seg
   },
@@ -256,6 +328,8 @@ export const store = reactive({
     if (!seg) return
     if (typeof patch.time === 'string') seg.time = patch.time
     if (typeof patch.event === 'string') seg.event = patch.event
+    if (typeof patch.desc === 'string') seg.desc = patch.desc
+    if (typeof patch.descHidden === 'boolean') seg.descHidden = patch.descHidden
   },
 
   removeSegment(articleId, timelineId, segmentId) {
@@ -314,7 +388,7 @@ export const store = reactive({
     const rel = a?.children.find((c) => c.id === relationsId)
     if (!rel) return null
     const i = rel.persons.length
-    const p = { id: uid(), name, note: '', bio: '', factionId: null, x: 70 + (i % 7) * 78, y: 55 + Math.floor(i / 7) * 100 }
+    const p = { id: uid(), name, note: '', bio: '', factionIds: [], factionId: null, x: 70 + (i % 7) * 78, y: 55 + Math.floor(i / 7) * 100 }
     rel.persons.push(p)
     return p
   },
@@ -327,7 +401,14 @@ export const store = reactive({
     if (typeof patch.name === 'string') p.name = patch.name
     if (typeof patch.note === 'string') p.note = patch.note
     if (typeof patch.bio === 'string') p.bio = patch.bio
-    if (patch.factionId === null || typeof patch.factionId === 'string') p.factionId = patch.factionId
+    if (Array.isArray(patch.factionIds)) {
+      const valid = new Set(rel.factions.map((f) => f.id))
+      p.factionIds = patch.factionIds.filter((fid) => valid.has(fid))
+      p.factionId = p.factionIds[0] || null
+    } else if (patch.factionId === null || typeof patch.factionId === 'string') {
+      p.factionIds = patch.factionId ? [patch.factionId] : []
+      p.factionId = patch.factionId
+    }
   },
 
   removePerson(articleId, relationsId, personId) {
@@ -373,7 +454,8 @@ export const store = reactive({
     if (idx < 0) return
     rel.factions.splice(idx, 1)
     for (const p of rel.persons) {
-      if (p.factionId === factionId) p.factionId = null
+      p.factionIds = p.factionIds.filter((fid) => fid !== factionId)
+      p.factionId = p.factionIds[0] || null
     }
   },
 
@@ -402,12 +484,151 @@ export const store = reactive({
     if (idx >= 0) rel.edges.splice(idx, 1)
   },
 
-  focusChild(childId, personId = null) {
-    this.focus = { childId, personId, ts: Date.now() }
+  focusChild(childId, personId = null, segId = null) {
+    this.focus = { childId, personId, segId, ts: Date.now() }
+  },
+
+  // 用备份 JSON 整体替换当前数据
+  replaceAll(raw) {
+    this.data = normalize(raw)
+    this.back()
+  },
+
+  // 导入人物关系：{ persons: [{name, note, bio, factions:[名称]}], edges: [{from,to,label}] }（名称均为文本）
+  importRelations(articleId, data, title = '导入的人物关系') {
+    const a = this.data.articles.find((x) => x.id === articleId)
+    if (!a) return null
+    const child = { id: uid(), type: 'relations', title, persons: [], edges: [], factions: [] }
+    const factionByName = new Map()
+    let fi = 0
+    for (const p of data.persons) {
+      for (const fname of p.factions) {
+        if (!fname || factionByName.has(fname)) continue
+        const f = { id: uid(), name: fname, desc: '', color: FACTION_COLORS[fi++ % FACTION_COLORS.length] }
+        child.factions.push(f)
+        factionByName.set(fname, f.id)
+      }
+    }
+    const personByName = new Map()
+    let i = 0
+    for (const p of data.persons) {
+      if (!p.name || personByName.has(p.name)) continue
+      const factionIds = p.factions.map((n) => factionByName.get(n)).filter(Boolean)
+      const person = {
+        id: uid(),
+        name: p.name,
+        note: p.note || '',
+        bio: p.bio || '',
+        factionIds,
+        factionId: factionIds[0] || null,
+        x: 70 + (i % 7) * 78,
+        y: 55 + Math.floor(i / 7) * 100
+      }
+      child.persons.push(person)
+      personByName.set(p.name, person.id)
+      i++
+    }
+    for (const e of data.edges) {
+      const from = personByName.get(e.from)
+      const to = personByName.get(e.to)
+      if (!from || !to || from === to) continue
+      child.edges.push({ id: uid(), from, to, label: e.label || '' })
+    }
+    a.children.push(child)
+    a.updatedAt = Date.now()
+    return child
+  },
+
+  // 导入时间轴：[{ title, segments: [{time,event,desc,docs:[章节标题],persons:['关系图 / 人物名'|'关系图']}] }]
+  importTimeline(articleId, groups, baseTitle = '导入的时间轴') {
+    const a = this.data.articles.find((x) => x.id === articleId)
+    if (!a || !groups.length) return []
+    const docByName = new Map(a.children.filter((c) => c.type === 'doc').map((c) => [c.title, c.id]))
+    const created = []
+    for (const g of groups) {
+      const title = groups.length === 1 && g.title === '导入的时间轴' ? baseTitle : g.title
+      const tl = { id: uid(), type: 'timeline', title, segments: [] }
+      for (const s of g.segments) {
+        const seg = { id: uid(), time: s.time, event: s.event, desc: s.desc, docLinks: [], personLinks: [], descHidden: false }
+        for (const dt of s.docs) {
+          const id = docByName.get(dt)
+          if (id && !seg.docLinks.includes(id)) seg.docLinks.push(id)
+        }
+        for (const pd of s.persons) {
+          const parts = pd.split('/').map((x) => x.trim())
+          const relName = parts[0]
+          const personName = parts[1] || ''
+          const rel = a.children.find((c) => c.type === 'relations' && c.title === relName)
+          if (!rel) continue
+          if (!personName) {
+            seg.personLinks.push({ relationsId: rel.id, personId: null })
+            continue
+          }
+          const p = rel.persons.find((x) => x.name === personName)
+          if (p) seg.personLinks.push({ relationsId: rel.id, personId: p.id })
+        }
+        tl.segments.push(seg)
+      }
+      a.children.push(tl)
+      created.push(tl)
+    }
+    a.updatedAt = Date.now()
+    return created
   }
 })
 
 watch(() => store.data, scheduleSave, { deep: true })
+
+// ---------- 码字统计（仅统计章节） ----------
+function chapterTotalWords() {
+  let total = 0
+  for (const a of store.data.articles) {
+    for (const c of a.children) {
+      if (c.type === 'doc') total += countWords(c.content)
+    }
+  }
+  return total
+}
+
+function trackWordDiff() {
+  const stats = store.data.stats
+  if (!stats) return
+  const total = chapterTotalWords()
+  stats.totalWordsSnapshot = total
+  const today = dateKey()
+  // 每日字数＝当日净增字数：首次写入时记录当日起点总量，之后实时覆盖为
+  // 「当前总量 − 当日起点」，删除同步扣减，仅保留该时段最终完成的字数
+  if (!stats.dayStart || stats.dayStart.date !== today) {
+    stats.dayStart = { date: today, total }
+  }
+  const net = Math.max(0, total - stats.dayStart.total)
+  if (net > 0 || stats.words[today] !== undefined) stats.words[today] = net
+}
+
+watch(
+  () => store.data,
+  () => {
+    if (store.ready) trackWordDiff()
+  },
+  { deep: true }
+)
+
+// 每 5 秒结算一次码字时长：30 秒内有章节编辑输入则计入 5 秒
+if (typeof window !== 'undefined') {
+  setInterval(() => {
+    const stats = store.data.stats
+    if (!stats) return
+    if (store._lastInput && Date.now() - store._lastInput < 30000) {
+      const k = dateKey()
+      stats.duration[k] = (stats.duration[k] || 0) + 5
+    }
+  }, 5000)
+
+  // 章节编辑器输入 → 标记活跃（灵感编辑不计入）
+  document.addEventListener('input', (e) => {
+    if (e.target?.closest?.('.col-body .rich-editor')) store.markWritingActivity()
+  })
+}
 
 window.addEventListener('beforeunload', () => {
   if (store.ready) storage.save(JSON.parse(JSON.stringify(store.data)))

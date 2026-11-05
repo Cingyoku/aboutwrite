@@ -38,6 +38,7 @@
       "src/preload/**/*"
     ],
     "win": {
+      "signAndEditExecutable": false,
       "target": [
         {
           "target": "nsis",

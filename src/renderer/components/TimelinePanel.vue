@@ -1,7 +1,6 @@
 <script setup>
-import { ref, reactive, computed, nextTick } from 'vue'
+import { ref, reactive, computed, watch, nextTick } from 'vue'
 import { store } from '../store'
-import { saveFile, buildTimelineSvg } from '../export'
 import LinkPicker from './LinkPicker.vue'
 
 const props = defineProps({
@@ -34,7 +33,7 @@ function removeTl(tl) {
 function addSegment(tl) {
   const seg = store.addSegment(props.article.id, tl.id)
   if (!seg) return
-  draft[seg.id] = { time: '', event: '' }
+  draft[seg.id] = { time: '', event: '', desc: '' }
   editing.add(seg.id)
   delete errors[seg.id]
   nextTick(() => {
@@ -44,29 +43,29 @@ function addSegment(tl) {
   })
 }
 
-async function exportSvg(tl) {
-  try {
-    const svg = buildTimelineSvg(tl, props.article)
-    const name = (tl.title || '时间轴').replace(/[\\/:*?"<>|]/g, '_')
-    await saveFile(`${name}.svg`, svg, 'image/svg+xml')
-  } catch (err) {
-    window.alert('导出失败：' + (err.message || err))
+// 列头「+ 新建」信号：直接向指定时间轴追加文段并进入编辑
+watch(
+  () => store.segFocus,
+  (sf) => {
+    if (!sf?.tlId) return
+    const tl = props.article.children.find((c) => c.type === 'timeline' && c.id === sf.tlId)
+    if (tl) addSegment(tl)
   }
-}
+)
 
 function startEdit(tl, seg) {
-  draft[seg.id] = { time: seg.time, event: seg.event }
+  draft[seg.id] = { time: seg.time, event: seg.event, desc: seg.desc || '' }
   editing.add(seg.id)
   delete errors[seg.id]
 }
 
 function saveEdit(tl, seg) {
-  const d = draft[seg.id] || { time: '', event: '' }
+  const d = draft[seg.id] || { time: '', event: '', desc: '' }
   if (!d.event.trim()) {
     errors[seg.id] = '事件内容不能为空'
     return
   }
-  store.updateSegment(props.article.id, tl.id, seg.id, { time: d.time, event: d.event })
+  store.updateSegment(props.article.id, tl.id, seg.id, { time: d.time, event: d.event, desc: d.desc })
   finishEdit(seg)
 }
 
@@ -85,6 +84,10 @@ function removeSeg(tl, seg) {
     finishEdit(seg)
     store.removeSegment(props.article.id, tl.id, seg.id)
   }
+}
+
+function toggleDesc(tl, seg) {
+  store.updateSegment(props.article.id, tl.id, seg.id, { descHidden: !seg.descHidden })
 }
 
 function resetDrag() {
@@ -206,17 +209,12 @@ function personName(relationsId, personId) {
     </div>
 
     <div v-if="expanded.has(tl.id)" class="child-body">
-      <div class="rel-hint">按住文段左侧手柄拖动可排序；时间可留空，事件内容必填。</div>
-      <div class="sub-row">
-        <button class="btn small primary" @click="addSegment(tl)">+ 新建文段</button>
-        <button class="btn small" title="导出为 .svg 矢量图" @click="exportSvg(tl)">导出 .svg</button>
-      </div>
-
       <div class="seg-list" @dragover="onListDragOver($event, tl)" @drop="onListDrop($event, tl)">
         <div
           v-for="(seg, i) in tl.segments"
           :key="seg.id"
           class="seg"
+          :data-seg-id="seg.id"
           :class="{
             dragging: drag.active && drag.timelineId === tl.id && drag.fromIndex === i,
             'drop-before': indicator(tl, i, true),
@@ -248,6 +246,12 @@ function personName(relationsId, personId) {
                     placeholder="事件内容（必填）"
                   />
                 </div>
+                <textarea
+                  class="seg-desc-input"
+                  v-model="draft[seg.id].desc"
+                  rows="3"
+                  placeholder="描述（可选）：补充事件背景、细节、影响等"
+                ></textarea>
               </div>
             </template>
             <template v-else>
@@ -255,9 +259,11 @@ function personName(relationsId, personId) {
                 <span v-if="seg.time">{{ seg.time }}</span>
                 <span v-else class="blank">（无时间）</span>
               </div>
-              <div class="seg-event">{{ seg.event }}</div>
+              <div class="seg-event" :class="{ blank: !seg.event }">{{ seg.event || '（未填写事件，点击「编辑」补充）' }}</div>
             </template>
           </div>
+
+          <div v-if="!editing.has(seg.id) && seg.desc && !seg.descHidden" class="seg-desc">{{ seg.desc }}</div>
 
           <div v-if="editing.has(seg.id)" class="seg-actions">
             <button class="btn small primary" @click="saveEdit(tl, seg)">保存</button>
@@ -266,6 +272,9 @@ function personName(relationsId, personId) {
           </div>
           <div v-else class="seg-actions">
             <button class="btn small" @click="startEdit(tl, seg)">编辑</button>
+            <button v-if="seg.desc" class="btn small" @click="toggleDesc(tl, seg)">
+              {{ seg.descHidden ? '显示描述' : '隐藏描述' }}
+            </button>
             <button class="btn small" @click="openPicker(tl, seg, 'doc')">关联章节</button>
             <button class="btn small" @click="openPicker(tl, seg, 'person')">关联人物</button>
             <button class="btn small danger" @click="removeSeg(tl, seg)">删除</button>
@@ -298,7 +307,7 @@ function personName(relationsId, personId) {
         </div>
       </div>
 
-      <div v-if="tl.segments.length === 0" class="col-empty">暂无文段。可乱序录入，再拖拽排出顺序。</div>
+      <div v-if="tl.segments.length === 0" class="col-empty">暂无文段</div>
     </div>
   </div>
 

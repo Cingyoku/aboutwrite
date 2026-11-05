@@ -12,14 +12,4 @@ document.addEventListener('focusin', (e) => {
   else if (t.matches?.('textarea')) lastEditor = t
 })
 
-window.addEventListener('keydown', (e) => {
-  if (e.key !== 'F11') return
-  e.preventDefault()
-  if (document.fullscreenElement) {
-    document.exitFullscreen().catch(() => {})
-    return
-  }
-  lastEditor?.requestFullscreen?.().catch(() => {})
-})
-
 createApp(App).mount('#app')
