@@ -1,4 +1,4 @@
-# Writing Studio
+# 写作台（Writing Studio）
 
 Feature Name: writing-studio
 Version: 2.0
@@ -30,15 +30,15 @@ graph TD
 
 | 组件 | 职责 |
 | --- | --- |
-| store.js | 数据模型 normalize/迁移（v1 纯文本→富文本）、全部业务 action、字数统计 `countWords` |
+| store.js | 数据模型 normalize/迁移（v1 纯文本→富文本）、全部业务 action、字数统计 `countWords`、`mergeBackup` 合并导入备份（同 id 以备份为准、备份独有补入、备份外新增保留） |
 | export.js | `htmlToPlain`、`buildMarkdown`、`buildRtf`（含 `rtfTable` 内置表格）、`buildDocx`(docx 库)、`buildPng`(canvas)、`buildRelationsSvg`/`buildTimelineSvg`(.svg)、`saveFile`(IPC 或下载) |
-| RichEditor.vue | contenteditable 富文本编辑器；WHEN 回车缩进开启，keydown Enter → `insertParagraph` + `insertText` 两个全角空格 |
+| RichEditor.vue | contenteditable 富文本编辑器；WHEN 回车缩进开启，keydown Enter → `insertParagraph` + `insertText` 两个全角空格；启用 `f11-fullscreen` 属性时（章节文本窗口），编辑状态下 keydown F11 → 对本编辑器切换 `requestFullscreen`/`exitFullscreen`，Esc 由原生全屏行为退出 |
 | WorkSpace.vue | 三列布局状态机（normal/max/min + 可拖分隔条）、大纲入口、总字数、文章级导出（勾选范围） |
-| DocPanel.vue | 章节卡片、每窗口字数、格式工具栏（回车缩进/字号/加粗/斜体）、导出面板（范围+格式） |
+| DocPanel.vue | 章节卡片、每窗口字数、格式工具栏（回车缩进/字号/加粗/斜体）、导出面板（范围+格式）；向 RichEditor 传入 `f11-fullscreen` 启用 F11 全屏 |
 | RelationsCard.vue | SVG 关系图：人物节点（阵营色环）、多重关系以 15px 线距并列错开（叠加 bend 偏移）、bend 手柄拖拽弯曲、关系描述沿线条方向旋转呈现（按线距堆叠防重叠）、阵营标签为拖放目标（人物卡片拖入入营/拖出离营）、导出 .svg |
 | RelationsPanel.vue | 人物关系子项目卡片列表（标题/删除/折叠），内嵌 RelationsCard |
 | TimelinePanel.vue | 时间轴子项目卡片列表：文段新建/编辑（时间可空、事件必填）、手柄拖拽排序、关联 chips、导出 .svg（竖向时间轴） |
-| renderer/main.js | focusin 追踪最近文本窗口；F11 → 对当前 rich-editor/textarea 切换 requestFullscreen |
+| renderer/main.js | focusin 追踪最近文本窗口（供扩展使用） |
 
 ## Data Models
 

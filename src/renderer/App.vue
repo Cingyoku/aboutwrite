@@ -21,9 +21,14 @@ function applyBackup(parsed) {
     if (!parsed || !Array.isArray(parsed.articles)) throw new Error('不是有效的备份数据（缺少 articles）')
     const aCount = parsed.articles.length
     const iCount = Array.isArray(parsed.inspirations) ? parsed.inspirations.length : 0
-    if (!window.confirm(`导入该备份将覆盖当前全部数据（备份含 ${aCount} 篇文章、${iCount} 条灵感）。确定继续？`)) return
-    store.replaceAll(parsed)
-    window.alert(`已导入：${aCount} 篇文章、${iCount} 条灵感`)
+    if (
+      !window.confirm(
+        `导入该备份仅修正备份中的 ${aCount} 篇文章、${iCount} 条灵感（同 id 以备份为准，备份独有的补入）；导出后新增的文章、灵感与章节将保留不变。确定继续？`
+      )
+    )
+      return
+    store.mergeBackup(parsed)
+    window.alert(`已按备份修正：${aCount} 篇文章、${iCount} 条灵感（备份外新增内容已保留）`)
   } catch (err) {
     window.alert('导入失败：' + (err.message || err))
   }
@@ -70,7 +75,7 @@ onMounted(() => window.electronAPI?.onMenuAction?.(onMenuAction))
   <div class="app-shell">
     <header class="app-header">
       <div class="brand">
-        Writing Studio
+        写作台
         <span class="sub">本地写作 · 文章 / 灵感 / 章节 / 时间轴 / 人物关系</span>
       </div>
       <button v-if="store.view !== 'list'" class="btn small" @click="store.back()">返回主页</button>

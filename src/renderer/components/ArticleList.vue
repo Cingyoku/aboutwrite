@@ -152,9 +152,14 @@ function onImportFile(e) {
       if (!parsed || !Array.isArray(parsed.articles)) throw new Error('不是有效的备份数据（缺少 articles）')
       const aCount = parsed.articles.length
       const iCount = Array.isArray(parsed.inspirations) ? parsed.inspirations.length : 0
-      if (!window.confirm(`导入该备份将覆盖当前全部数据（备份含 ${aCount} 篇文章、${iCount} 条灵感）。确定继续？`)) return
-      store.replaceAll(parsed)
-      importMsg.value = `已导入：${aCount} 篇文章、${iCount} 条灵感`
+      if (
+        !window.confirm(
+          `导入该备份仅修正备份中的 ${aCount} 篇文章、${iCount} 条灵感（同 id 以备份为准，备份独有的补入）；导出后新增的文章、灵感与章节将保留不变。确定继续？`
+        )
+      )
+        return
+      store.mergeBackup(parsed)
+      importMsg.value = `已按备份修正：${aCount} 篇文章、${iCount} 条灵感（备份外新增内容已保留）`
     } catch (err) {
       importErr.value = true
       importMsg.value = '导入失败：' + (err.message || err)

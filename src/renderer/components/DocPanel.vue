@@ -82,7 +82,7 @@ async function doExport() {
       <button class="icon-btn danger" title="删除章节" @click.stop="remove(d)">✕</button>
     </div>
     <div v-if="expanded.has(d.id)" class="child-body">
-      <RichEditor v-model="d.content" :font-size="fmt.fontSize" :indent="fmt.indent" placeholder="自由书写..." />
+      <RichEditor v-model="d.content" :font-size="fmt.fontSize" :indent="fmt.indent" f11-fullscreen placeholder="自由书写..." />
     </div>
   </div>
 

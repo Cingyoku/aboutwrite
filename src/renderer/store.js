@@ -494,6 +494,30 @@ export const store = reactive({
     this.back()
   },
 
+  // 合并导入备份：仅修正备份涉及的内容——文章 / 灵感按备份版本覆盖（同 id）并补入备份独有的项，
+  // 同 id 文章内的章节等子项目同样按 id 覆盖 / 补入；
+  // 备份之外（导出后新增）的文章、灵感与子项目保持不变，统计与码字记录沿用当前数据
+  mergeBackup(raw) {
+    const incoming = normalize(raw)
+    const keepNew = (cur, inc) => {
+      const incIds = new Set(inc.map((x) => x.id))
+      return cur.filter((x) => !incIds.has(x.id))
+    }
+    const curAById = new Map(this.data.articles.map((x) => [x.id, x]))
+    const articles = incoming.articles.map((inc) => {
+      const cur = curAById.get(inc.id)
+      if (!cur) return inc
+      return { ...inc, children: [...inc.children, ...keepNew(cur.children, inc.children)] }
+    })
+    articles.push(...keepNew(this.data.articles, incoming.articles))
+    this.data = {
+      ...this.data,
+      articles,
+      inspirations: [...incoming.inspirations, ...keepNew(this.data.inspirations, incoming.inspirations)]
+    }
+    this.back()
+  },
+
   // 导入人物关系：{ persons: [{name, note, bio, factions:[名称]}], edges: [{from,to,label}] }（名称均为文本）
   importRelations(articleId, data, title = '导入的人物关系') {
     const a = this.data.articles.find((x) => x.id === articleId)

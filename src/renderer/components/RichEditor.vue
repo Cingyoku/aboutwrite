@@ -5,7 +5,9 @@ const props = defineProps({
   modelValue: { type: String, default: '' },
   fontSize: { type: Number, default: 16 },
   indent: { type: Boolean, default: true },
-  placeholder: { type: String, default: '' }
+  placeholder: { type: String, default: '' },
+  // F11 全屏开关：仅章节文本窗口启用，灵感编辑器等保持关闭
+  f11Fullscreen: { type: Boolean, default: false }
 })
 
 const emit = defineEmits(['update:modelValue'])
@@ -16,7 +18,23 @@ function onInput() {
   emit('update:modelValue', el.value.innerHTML)
 }
 
+// 编辑状态（焦点位于编辑器内）下按 F11：本窗口进入全屏，再次按下或 Esc 退出
+function toggleFullscreen() {
+  if (document.fullscreenElement === el.value) {
+    document.exitFullscreen?.()
+  } else if (!document.fullscreenElement) {
+    el.value?.requestFullscreen?.().catch(() => {})
+  }
+}
+
 function onKeydown(e) {
+  if (e.key === 'F11') {
+    if (props.f11Fullscreen) {
+      e.preventDefault()
+      toggleFullscreen()
+    }
+    return
+  }
   if (e.key !== 'Enter' || e.shiftKey || e.altKey || e.ctrlKey || e.metaKey) return
   e.preventDefault()
   try {

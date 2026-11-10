@@ -1,6 +1,6 @@
 {
   "name": "writing-studio",
-  "productName": "Writing Studio",
+  "productName": "写作台",
   "version": "0.1.0",
   "description": "Win11 本地写作软件：文章、章节、时间轴、人物关系",
   "author": "MonkeyCode",
@@ -28,7 +28,7 @@
   },
   "build": {
     "appId": "com.monkeycode.writingstudio",
-    "productName": "Writing Studio",
+    "productName": "写作台",
     "directories": {
       "output": "release"
     },
